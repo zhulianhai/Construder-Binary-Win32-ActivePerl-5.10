@@ -21,4 +21,6 @@ If anyone feels like contributing, by providing their own binary package or help
 3. wait until the server starts showing "`SECTORS LOADED ON FREE: 0:`"
 4. run `client.bat`
 5. login with any name
-6. to shut down the server use `Ctrl+C`
+6. press `f` to activate mouse look mode
+6. press `ESC`, `F1`, `F2`, `F3` or `F4` to open menu and help screens, which can be closed again with `ESC`
+6. to shut down the server press `F12` in the client, then `ESC` `q` to close the client
