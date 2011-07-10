@@ -11,3 +11,14 @@ In order to stay up-to-date one can either just follow this repo with one's own 
 https://github.com/Construder-Binary/Construder-Binary-Win32-ActivePerl-5.10/commits/master.atom
 
 If anyone feels like contributing, by providing their own binary package or helping to maintain this in synch, feel free to ask 'mithaldu' in #sdl on the irc.perl.org IRC server.
+
+## Quickstart
+
+1. unpack
+   * either unzip the download
+   * or clone the git repo with: `git clone git://github.com/Construder-Binary/Construder-Binary-Win32-ActivePerl-5.10.git`
+2. run `server.bat`
+3. wait until the server starts showing "`SECTORS LOADED ON FREE: 0:`"
+4. run `client.bat`
+5. login with any name
+6. to shut down the server use `Ctrl+C`
