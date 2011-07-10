@@ -1,0 +1,10 @@
+#!/opt/perl/bin/perl
+use common::sense;
+use Games::Construder;
+use Games::Construder::Client;
+
+Games::Construder::Debug::init ("client");
+
+our $game = Games::Construder::Client->new (auto_login => $ARGV[0]);
+
+$game->start;
