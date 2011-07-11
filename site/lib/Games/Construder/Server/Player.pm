@@ -194,6 +194,7 @@ sub init {
    $self->new_ui (score         => "Games::Construder::Server::UI::Score");
    $self->new_ui (slots         => "Games::Construder::Server::UI::Slots");
    $self->new_ui (status        => "Games::Construder::Server::UI::Status");
+   $self->new_ui (server_info   => "Games::Construder::Server::UI::ServerInfo");
    $self->new_ui (material_view => "Games::Construder::Server::UI::MaterialView");
    $self->new_ui (inventory     => "Games::Construder::Server::UI::Inventory");
    $self->new_ui (cheat         => "Games::Construder::Server::UI::Cheat");
@@ -757,10 +758,21 @@ sub start_dematerialize {
       my ($data) = @_;
       my $type = $data->[0];
       my $obj = $Games::Construder::Server::RES->get_object_by_type ($type);
+      if ($type == 1) { # materialization, due to glitches
+         world_mutate_at ($pos, sub {
+            my ($data) = @_;
+            $data->[0] = 0;
+            $data->[5] = undef;
+            $data->[3] &= 0xF0;
+            return 1;
+         });
+
+         return;
+      }
+
       if ($obj->{untransformable}) {
          return;
       }
-      warn "DEMAT $type\n";
 
       unless ($self->{inv}->has_space_for ($type)) {
          $self->msg (1, "Inventory full, no space for $obj->{name} available!");
