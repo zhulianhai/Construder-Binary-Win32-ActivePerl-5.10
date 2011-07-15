@@ -42,19 +42,14 @@ our @EXPORT = qw/
    ui_select_item
    ui_range
    ui_entry
+   ui_entry_small
    ui_multiline
    ui_pad_box
 /;
 
 =head1 NAME
 
-Games::Construder::UI - desc
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::UI - Construder Userinterface Theme Definition
 
 =over 4
 
@@ -193,6 +188,16 @@ sub ui_range {
     }, $val]
 }
 
+sub ui_entry_small {
+   my ($arg, $txt, $maxchars) = @_;
+   [entry => { font => 'small', color => $TEXT_COLOR, arg => $arg,
+               align => "center",
+               (defined $maxchars ? (max_chars => $maxchars) : ()),
+               highlight => [$BG_COLOR, $BG_SEL_COLOR] },
+    $txt]
+}
+
+
 sub ui_entry {
    my ($arg, $txt, $maxchars) = @_;
    [entry => { font => 'normal', color => $TEXT_COLOR, arg => $arg,
@@ -285,8 +290,6 @@ sub ui_hud_window_above {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

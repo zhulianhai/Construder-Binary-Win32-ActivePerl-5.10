@@ -27,13 +27,7 @@ our @EXPORT = qw/
 
 =head1 NAME
 
-Games::Construder::Server::UI - desc
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Server::UI - Server-side Userinterface for Player interaction
 
 =over 4
 
@@ -446,11 +440,13 @@ sub handle_command {
          msg       => "Do you really want to shutdown the server?",
          cb => sub {
             $self->delete_ui ('shutdown');
-            $self->{pl}->msg (0, "Shutting down the server in 2 seconds...");
-            my $t; $t = AE::timer 2, 0, sub {
-               $Games::Construder::Server::World::SRV->shutdown;
-               undef $t;
-            };
+            if ($_[0]) {
+               $self->{pl}->msg (0, "Shutting down the server in 2 seconds...");
+               my $t; $t = AE::timer 2, 0, sub {
+                  $Games::Construder::Server::World::SRV->shutdown;
+                  undef $t;
+               };
+            }
          });
       $self->hide;
       $self->show_ui ('shutdown');
@@ -483,7 +479,18 @@ sub layout {
 
    my $sinfo = world_sector_info ($chnk_pos);
 
-   if ($bio_usage) {
+   if (ref $bio_usage) {
+      my $wself = $self;
+      weaken $wself;
+      $self->{bio_intake} = $bio_usage;
+      warn "BIO INTKE @$bio_usage\n";
+      $self->{bio_intake_tmr} = AE::timer 2, 0, sub {
+         delete $wself->{bio_intake};
+         $wself->show;
+         delete $wself->{bio_intake_tmr};
+      };
+
+   } elsif ($bio_usage) {
       my $wself = $self;
       weaken $wself;
       $self->{bio_usage} = $bio_usage;
@@ -529,7 +536,11 @@ sub layout {
         [box => { },
            [text => { align => "right", font => "big", color => _range_color ($self->{pl}->{data}->{bio}, 60), max_chars => 4 },
               sprintf ("%d%%", $self->{pl}->{data}->{bio})],
-           [text => { align => "center", color => "#888888" }, "bio"],
+           ($self->{bio_intake}
+              ? [box => { dir => "hor", align => "left" },
+                   [text => { align => "center", font => "big", color => "#00ff00", wrap => -2 }, "+"],
+                   [model => { animated => 0, align => "center", width => 30 }, $self->{bio_intake}->[0]]]
+              : [text => { align => "center", color => "#888888" }, "bio"])
         ],
         ($self->{bio_usage}
            ? [box => { },
@@ -928,20 +939,20 @@ sub layout {
 
    my @subtxts;
    push @subtxts,
-      "It's complexity is " . _perc_to_word ($o->{complexity})
-      . " and it's density is " . _perc_to_word ($o->{density});
+      "Its complexity is " . _perc_to_word ($o->{complexity})
+      . " and its density is " . _perc_to_word ($o->{density});
    push @subtxts,
       @sec
-         ? "This can be found in sectors with following types: " . join (", ", @sec)
-         : "This can not be found in any sector.";
+         ? "It can be found in sectors with following types: " . join (", ", @sec)
+         : "It cannot be found in any sector.";
    push @subtxts,
       @destmat
-         ? "This can be used as source material for: "
+         ? "It can be used as source material for: "
            . join (", ", map { $_->{name} } @destmat)
-         : "This can't be processed any further.";
+         : "It can't be processed any further.";
    push @subtxts,
       $inv_cnt
-         ? "You have $inv_cnt of this in your inventory."
+         ? "You have $inv_cnt of it in your inventory."
          : "You don't have any of it in your inventory.";
 
    ui_window ($o->{name},
@@ -1749,6 +1760,7 @@ package Games::Construder::Server::UI::PatternStorage;
 use Games::Construder::UI;
 use Games::Construder::Server::World;
 use Games::Construder::Server::Player;
+use Games::Construder::Logging;
 
 use base qw/Games::Construder::Server::UI/;
 
@@ -1791,7 +1803,6 @@ sub handle_command {
                   return 0 unless $cell->[0] == 31;
                   my $ent = $cell->[-1];
                   $ent->{label} = $txt;
-                  warn "set label @$pos: $cell->[0], $ent | $ent->{label}\n";
                   $self->show;
                   1
                });
@@ -1813,16 +1824,18 @@ sub handle_command {
                my ($num) = $self->{pl}->{inv}->get_count ($invid);
                my ($cnt, $ent) = $self->{pl}->{inv}->remove ($invid, $num);
                if ($cnt) {
-                  warn "OK TRANSFE $invid : $ent  | $num\n";
-                  if ($ps_hdl->add ($invid, $ent ? $ent : $num)) {
+                  my $cnt_added = $ps_hdl->add ($invid, $ent ? $ent : $num);
+                  ctr_log (debug => "pattern_storage: transfer %s from inv %d added, %d num", $invid, $cnt_added, $num);
+                  my $put_back = $num - $cnt_added;
+                  if ($cnt_added) {
                      $self->{pl}->msg (
-                        0, "Transfered $num $o->{name} into the pattern storage.");
+                        0, "Transfered $cnt_added $o->{name} into the pattern storage.");
                   } else {
-                  warn "TRANSFER FAILED\n";
-                     $self->{pl}->{inv}->add ($invid, $ent ? $ent : $num);
                      $self->{pl}->msg (
                         1, "$num $o->{name} does not fit into the pattern storage.");
                   }
+
+                  $self->{pl}->{inv}->add ($invid, $ent ? $ent : $put_back) if $put_back;
                }
             }
             $self->delete_ui ('label_pattern_store');
@@ -1842,14 +1855,18 @@ sub handle_command {
                my ($num) = $ps_hdl->get_count ($invid);
                my ($cnt, $ent) = $ps_hdl->remove ($invid, $num);
                if ($cnt) {
-                  if ($self->{pl}->{inv}->add ($invid, $ent ? $ent : $num)) {
+                  my $cnt_added = $self->{pl}->{inv}->add ($invid, $ent ? $ent : $num);
+                  ctr_log (debug => "pattern_storage: transfer %s to inv %d added, %d num", $invid, $cnt_added, $num);
+                  my $put_back = $num - $cnt_added;
+                  if ($cnt_added) {
                      $self->{pl}->msg (
-                        0, "Transfered $num $o->{name} into your inventory.");
+                        0, "Transfered $cnt_added $o->{name} into your inventory.");
                   } else {
-                     $ps_hdl->add ($invid, $ent ? $ent : $num);
                      $self->{pl}->msg (
                         1, "$num $o->{name} does not fit into your inventory.");
                   }
+
+                  $ps_hdl->add ($invid, $ent ? $ent : $put_back) if $put_back;
                }
             }
             $self->delete_ui ('label_pattern_store');
@@ -2331,8 +2348,6 @@ REF
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

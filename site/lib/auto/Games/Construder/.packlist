@@ -8,6 +8,7 @@ C:\Perl\site\lib\Games\Construder\Client\Frontend.pm
 C:\Perl\site\lib\Games\Construder\Client\Resources.pm
 C:\Perl\site\lib\Games\Construder\Client\UI.pm
 C:\Perl\site\lib\Games\Construder\Client\World.pm
+C:\Perl\site\lib\Games\Construder\Logging.pm
 C:\Perl\site\lib\Games\Construder\Noise.pm
 C:\Perl\site\lib\Games\Construder\Protocol.pm
 C:\Perl\site\lib\Games\Construder\Server.pm
@@ -49,4 +50,7 @@ C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_D2.cmds
 C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_D3.cmds
 C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_D4.cmds
 C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_E1234.cmds
+C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_F.cmds
+C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_X.cmds
+C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_Z.cmds
 C:\Perl\site\lib\auto\share\dist\Games-Construder\voldraw\sector_cubelike.cmds

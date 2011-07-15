@@ -18,13 +18,15 @@ package Games::Construder;
 use JSON;
 use common::sense;
 use Time::HiRes qw/time/;
+use Games::Construder::Logging;
+
 require Exporter;
 our @ISA = qw/Exporter/;
 our @EXPORT = qw/
    ctr_prof
 /;
 
-our $VERSION = '0.91';
+our $VERSION = '0.94';
 
 use XSLoader;
 XSLoader::load "Games::Construder", $Games::Construder::VERSION;
@@ -65,17 +67,14 @@ functions that are used in many places in the game.
 
 =cut
 
-our $PROF_DEBUG = 0;
-
 sub ctr_prof {
    my ($name, $sub) = @_;
-   if (!$PROF_DEBUG) {
+
+   ctr_cond_log (profile => sub {
+      my $t1 = time;
       $sub->();
-      return;
-   }
-   my $t1 = time;
-   $sub->();
-   printf "ctr_prof[%-20s] %0.4f\n", $name, time - $t1;
+      ctr_log (profile => "ctr_prof[%-20s] %0.4f\n", $name, time - $t1);
+   }, sub { $sub->() });
 }
 
 package Games::Construder::Util;
@@ -94,6 +93,7 @@ sub visible_chunks_at {
 }
 
 package Games::Construder::VolDraw;
+use Games::Construder::Logging;
 
 sub _get_file {
    my ($file) = @_;
@@ -260,7 +260,7 @@ sub draw_commands {
          my $s = $wg->{sector_types}->{$type};
          my $r = $s->{region_range};
          unless ($r) {
-            warn "No region range for sector type '$type' found!\n";
+            ctr_log (warn => "No region range for sector type '$type' found!\n");
          }
          show_map_range (@$r);
 
@@ -271,7 +271,7 @@ sub draw_commands {
          my $s = $wg->{sector_types}->{$type};
          my $r = $s->{ranges};
          unless ($r) {
-            warn "No ranges for sector type '$type' found!\n";
+            ctr_log (warn => "No ranges for sector type '$type' found!\n");
          }
          show_map_range ($r->[$range_idx * 3], $r->[($range_idx * 3) + 1]);
 
@@ -282,6 +282,7 @@ sub draw_commands {
 }
 
 package Games::Construder::Debug;
+use Games::Construder::Logging;
 use AnyEvent::Debug;
 
 our $SHELL;
@@ -291,31 +292,33 @@ sub init {
 
    return unless $ENV{PERL_GAMES_CONSTRUDER_DEBUG};
 
+   eval <<'ADDFUNCS';
+require Data::Dumper;
+
+sub ::AnyEvent::Debug::shell::d {
+   my ($d) = @_;
+   Data::Dumper::Dumper ($d)
+}
+
+sub ::AnyEvent::Debug::shell::wf {
+   my ($name, $data) = @_;
+   open my $fh, ">", "/tmp/$name.construder_debug"
+      or die "Couldn't open /tmp/$name.debug: $!\n";
+   binmode $fh;
+   print $fh $data;
+   close $fh;
+   print "wrote /tmp/$name.construder_debug";
+}
+ADDFUNCS
+
    $Data::Dumper::Indent = 2;
 
    my $sock = "/tmp/construder_shell_$name";
 
    $SHELL = AnyEvent::Debug::shell "unix/", $sock;
    if ($SHELL) {
-      warn "started shell at $sock, use with: 'socat readline $sock'\n";
+      ctr_log (info => "started shell at $sock, use with: 'socat readline $sock'\n");
    }
-}
-
-package AnyEvent::Debug::shell;
-use common::sense;
-use Data::Dumper;
-
-sub d {
-   my ($d) = @_;
-   Dumper ($d)
-}
-
-sub wf {
-   my ($name, $data) = @_;
-   open my $fh, ">", "/tmp/$name.debug"
-      or die "Couldn't open /tmp/$name.debug: $!\n";
-   binmode $fh;
-   print $fh $data;
 }
 
 =back

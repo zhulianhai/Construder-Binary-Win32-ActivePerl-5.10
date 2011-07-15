@@ -19,7 +19,6 @@ use common::sense;
 use AnyEvent;
 use AnyEvent::Handle;
 use AnyEvent::Socket;
-use EV;
 use JSON;
 
 use Games::Construder::Protocol;
@@ -29,22 +28,15 @@ use Games::Construder::Server::World;
 use Games::Construder::Server::Objects;
 use Games::Construder::UI;
 use Games::Construder::Vector;
+use Games::Construder::Logging;
 
 use base qw/Object::Event/;
 
 =head1 NAME
 
-Games::Construder::Server - desc
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Server - Server side networking and player management
 
 =over 4
-
-=item my $obj = Games::Construder::Server->new (%args)
 
 =cut
 
@@ -76,13 +68,15 @@ sub init {
    $RES->load_objects;
 
    $self->{sigint} = AE::signal INT => sub {
-      warn "received signal INT, saving maps and players and shutting down...\n";
+      ctr_log (info => "received signal INT, saving maps and players and shutting down...");
       $self->shutdown;
    };
    $self->{sigterm} = AE::signal TERM => sub {
-      warn "received signal TERM, saving maps and players and shutting down...\n";
+      ctr_log (info => "received signal TERM, saving maps and players and shutting down...");
       $self->shutdown;
    };
+
+   ctr_log (info => "Initiated world.");
 
 }
 
@@ -91,6 +85,7 @@ sub listen {
 
    tcp_server undef, $self->{port}, sub {
       my ($fh, $h, $p) = @_;
+
       $self->{clids}++;
       my $cid = "$h:$p:$self->{clids}";
       my $hdl = AnyEvent::Handle->new (
@@ -102,9 +97,12 @@ sub listen {
          },
       );
       $self->{clients}->{$cid} = $hdl;
+
       $self->client_connected ($cid);
       $self->handle_protocol ($cid);
    };
+
+   ctr_log (info => "Listening for clients on port %d", $self->{port});
 }
 
 sub shutdown {
@@ -113,7 +111,7 @@ sub shutdown {
    for (values %{$self->{players}}) {
       $_->save;
    }
-   EV::unloop;
+   $::CV->send;
 }
 
 sub handle_protocol {
@@ -128,9 +126,11 @@ sub handle_protocol {
 
 sub send_client {
    my ($self, $cid, $hdr, $body) = @_;
+
    $self->{clients}->{$cid}->push_write (packstring => "N", packet2data ($hdr, $body));
+
    if (!grep { $hdr->{cmd} eq $_ } qw/chunk activate_ui/) {
-      warn "srv($cid)> $hdr->{cmd}\n";
+      ctr_log (network => "send[%d]> %s: %s", length ($body), $hdr->{cmd}, join (',', keys %$hdr));
    }
 }
 
@@ -145,7 +145,6 @@ sub transfer_res2client {
          } else {
             $_->[-1] = ${$_->[-1]};
          }
-         #d# warn "PREPARE RESOURCE $_->[0]: " . length ($body) . "\n";
          packet2data ({
             cmd => "resource",
             res => $_
@@ -163,7 +162,6 @@ sub push_transfer {
 
    my $data = shift @$t;
    $self->{clients}->{$cid}->push_write (packstring => "N", $data);
-   warn "srv($cid)trans(".length ($data).")\n";
    unless (@$t) {
       $self->send_client ($cid, { cmd => "transfer_end" });
       delete $self->{transfer}->{$cid};
@@ -176,7 +174,7 @@ sub client_disconnected : event_cb {
    $pl->logout if $pl;
    delete $self->{player_guards}->{$cid};
    delete $self->{clients}->{$cid};
-   warn "client disconnected: $cid\n";
+   ctr_log (info => "Client disconnected: %s", $cid);
 }
 
 sub schedule_chunk_upd {
@@ -208,13 +206,13 @@ sub players_near_pos {
 
 sub client_connected : event_cb {
    my ($self, $cid) = @_;
+   ctr_log (info => "Client connected: %s", $cid);
 }
 
 sub handle_player_packet : event_cb {
    my ($self, $player, $hdr, $body) = @_;
 
    if ($hdr->{cmd} eq 'ui_response') {
-      warn "UIRESPONSE @{$hdr->{pos}}\n";
       $player->ui_res ($hdr->{ui}, $hdr->{ui_command}, $hdr->{arg},
                        [$hdr->{pos}, $hdr->{build_pos}]);
 
@@ -236,7 +234,6 @@ sub handle_player_packet : event_cb {
 
       } elsif ($hdr->{action} == 2 && @{$hdr->{build_pos} || []}) {
          $player->debug_at ($hdr->{pos});
-         warn "build pos:\n";
          $player->debug_at ($hdr->{build_pos});
 
       } elsif ($hdr->{action} == 3 && @{$hdr->{pos} || []}) {
@@ -269,14 +266,14 @@ sub login {
    $pl->init;
 
    $self->send_client ($cid,
-      { cmd => "login" });
+      { cmd => "login", name => $name });
 }
 
 sub handle_packet : event_cb {
    my ($self, $cid, $hdr, $body) = @_;
 
    if ($hdr->{cmd} ne 'p') {
-      warn "srv($cid)< $hdr->{cmd}\n";
+      ctr_log (network => "recv[%d]> %s: %s", length ($body), $hdr->{cmd}, join (',', keys %$hdr));
    }
 
    if ($hdr->{cmd} eq 'hello') {
@@ -340,8 +337,6 @@ sub handle_packet : event_cb {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

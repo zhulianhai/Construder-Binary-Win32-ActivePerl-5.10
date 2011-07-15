@@ -25,22 +25,15 @@ use JSON;
 use Games::Construder::Vector;
 use Games::Construder;
 use File::ShareDir::PAR;
+use Games::Construder::Logging;
 
 use base qw/Object::Event/;
 
 =head1 NAME
 
-Games::Construder::Client::UI - A simple and small GUI library for the game
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Client::UI - Client GUI implementation
 
 =over 4
-
-=item my $obj = Games::Construder::Client::UI->new (%args)
 
 =cut
 
@@ -542,11 +535,11 @@ sub update {
    $self->prepare_sdl_surface ($win->{bgcolor}, $size); # creates a new sdl surface for this window
 
    ctr_prof ("draw elements", sub {
-   $self->draw_element ($layout, [0, 0]);
+      $self->draw_element ($layout, [0, 0]);
    });
 
    ctr_prof ("render_view", sub {
-   $self->render_view; # refresh rendering to opengl texture
+      $self->render_view; # refresh rendering to opengl texture
    });
 }
 
@@ -853,7 +846,7 @@ sub do_multiline {
 
 sub input_key_press : event_cb {
    my ($self, $key, $name, $unicode, $rhandled) = @_;
-   warn "UI KP $key/$name/$unicode/\n";
+   ctr_log (debug => "UI(%s) keypress %s/%s/%d", $self->{name}, $key, $name, ord $unicode);
    my $cmd;
 
    my $el = $self->{active_element};
@@ -970,8 +963,6 @@ sub DESTROY {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

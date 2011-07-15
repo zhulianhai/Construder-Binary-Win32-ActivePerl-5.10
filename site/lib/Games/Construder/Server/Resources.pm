@@ -26,17 +26,9 @@ use base qw/Object::Event/;
 
 =head1 NAME
 
-Games::Construder::Server::Resources - desc
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Server::Resources - Server side Resource manangent and balancing
 
 =over 4
-
-=item my $obj = Games::Construder::Server::Resources->new (%args)
 
 =cut
 
@@ -916,6 +908,16 @@ sub get_trophy_type_by_score {
    $trophyt
 }
 
+sub get_teleport_destination_region_range {
+   my ($self) = @_;
+   @{$self->{content}->{teleport_region_rage}}
+}
+
+sub get_initial_position {
+   my ($self) = @_;
+   @{$self->{content}->{initial_position}}
+}
+
 sub credits {
    my ($self) = @_;
    $self->{content}->{credits}
@@ -926,8 +928,6 @@ sub credits {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

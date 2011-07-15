@@ -21,20 +21,13 @@ use SDL::Image;
 use SDL::Video;
 use OpenGL qw(:all);
 use Games::Construder;
+use Games::Construder::Logging;
 
 =head1 NAME
 
-Games::Construder::Client::Resources - Manage textures for the Client
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Client::Resources - Manage textures and object type attributes for the Client
 
 =over 4
-
-=item my $obj = Games::Construder::Client::Resources->new (%args)
 
 =cut
 
@@ -179,16 +172,17 @@ sub post_proc {
 
 sub dump_resources {
    my ($self) = @_;
+
    for (@{$self->{resource}}) {
       if ($_->{type} eq 'object') {
-         print JSON->new->pretty->encode ($_);
+         ctr_log (debug => "object: %s", JSON->new->pretty->encode ($_));
       } elsif ($_->{type} eq 'texture_mapping') {
-         print JSON->new->pretty->allow_blessed->encode ($_);
+         ctr_log (debug => "txture_mapping: %s", JSON->new->pretty->allow_blessed->encode ($_));
       } else {
-         print "res($_->{id}, $_->{type})[".length ($_->{data})."]\n";
+         ctr_log (debug => "res(%s,%s)[%d]", $_->{id}, $_->{type}, length ($_->{data}));
       }
    }
-   print JSON->new->pretty->allow_blessed->encode ($self->{obj2txt});
+   ctr_log (debug => "obj2txt: %s", JSON->new->pretty->allow_blessed->encode ($self->{obj2txt}));
 }
 
 sub set_resource_data {
@@ -329,8 +323,6 @@ sub get_sdl {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

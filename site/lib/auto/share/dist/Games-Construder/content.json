@@ -546,6 +546,7 @@
          "density" : 30,
          "complexity" : 55,
          "permanent" : 1, # this entity's data is stored permanently
+         "lore" : "Congratulations to anyone who earned this Trophy. You have officially reached the rank of a 'Construder'!",
          "trophy_score" : 10000000,
       },
    },
@@ -611,6 +612,23 @@
       },
       "ent" : { },
    },
+# unused at the moment:
+#   "teleport_points" : [ # dron teleports randomly to one of these:
+#      [1.1,   130,    1.1],
+#      [1.1,    30.5,  1.1],
+#      [1.1,   -29,    1.1],
+#      [1.1,  -129,    1.1],
+#      [  29.9,  1.0,  0.2],
+#      [ 130.1,  1.0,  0.2],
+#      [ -30,    1.0,  0.2],
+#      [-130,    1.0,  0.2],
+#      [1.5,     1.0,   29],
+#      [1.5,     1.0,128.9], # check following for sanity:
+#      [1.5,     1.0,  -30 ],
+#      [1.5,     1.0,  -130],
+#   ],
+   "initial_position" : [1.1, 130, 1.1],
+   "teleport_region_rage" : [0, 1.1], # possible random teleportation destination sector types
    "region" : {
       "file" : "voldraw/region_noise.cmds",
    },
@@ -833,5 +851,26 @@
             0.93, 0.99,  44,  # inner core: gold
          ]
       },
+      "F" : { # the empty sector
+         "region_range" : [1.5, 1.6],
+         "file" : "voldraw/sector_F.cmds",
+         "ranges" : [
+         ]
+      },
+      "X" : { # the center connector
+         "region_range" : [1.6, 1.7],
+         "file" : "voldraw/sector_X.cmds",
+         "ranges" : [
+            0.5, 1.01, 11,
+         ]
+      },
+      "Z" : { # the center pyramid
+         "region_range" : [1.8, 2],
+         "file" : "voldraw/sector_Z.cmds",
+         "ranges" : [
+            0.05, 0.5, 27,
+            0.5, 1.01, 44,
+         ]
+      }
    }
 }

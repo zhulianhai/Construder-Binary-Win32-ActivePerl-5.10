@@ -21,6 +21,7 @@ use Games::Construder::Client::Frontend;
 use Games::Construder::Client::World;
 use Games::Construder::Protocol;
 use Games::Construder::Vector;
+use Games::Construder::Logging;
 use Games::Construder;
 use AnyEvent;
 use AnyEvent::Socket;
@@ -32,17 +33,9 @@ use base qw/Object::Event/;
 
 =head1 NAME
 
-Games::Construder::Client - desc
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Client - Client Networking Implementation
 
 =over 4
-
-=item my $obj = Games::Construder::Client->new (%args)
 
 =cut
 
@@ -65,6 +58,15 @@ sub new {
    $self->{front} =
       Games::Construder::Client::Frontend->new (res => $self->{res}, client => $self);
 
+   $self->{in_ex} = 0;
+   $self->{front}->set_exception_cb (sub {
+      my ($ex, $ev) = @_;
+      return if $self->{in_ex};
+      local $self->{in_ex} = 1;
+      ctr_log (error => "exception in frontend (%s): %s", $ev, $ex);
+      $self->{front}->msg ("Fatal Error: Exception in frontend caught: $ev: $ex");
+   });
+
    $self->{front}->reg_cb (
       update_player_pos => sub {
          $self->send_server ({
@@ -84,7 +86,6 @@ sub new {
       },
       visible_chunks_changed => sub {
          my ($front, $new, $old, $req) = @_;
- #        warn "NEW: @$new, OLD @$old\n";
          (@$req) = grep {
             my $p = $_;
             my $id = world_pos2id ($p);
@@ -92,9 +93,8 @@ sub new {
             if ($self->{requested_chunks}->{$id}) {
                $rereq =
                   (time - $self->{requested_chunks}->{$id}) > 2;
-               if ($rereq) {
-                  warn "re-requesting chunk $id!\n";
-               }
+
+               ctr_log (network => "re-requesting chunk %s!", $id) if $rereq;
             }
             if ($rereq) {
                $self->{requested_chunks}->{$id} = time;
@@ -133,6 +133,7 @@ sub connect {
    tcp_connect $host, $port, sub {
       my ($fh) = @_;
       unless ($fh) {
+         ctr_log (error => "Couldn't connect to server %s at port %d: %s", $host, $port, $!);
          $self->{front}->msg ("Couldn't connect to server: $!");
          $self->{recon} = AE::timer 5, 0, sub { $self->reconnect; };
          return;
@@ -167,20 +168,21 @@ sub send_server {
    my ($self, $hdr, $body) = @_;
    if ($self->{srv}) {
       $self->{srv}->push_write (packstring => "N", packet2data ($hdr, $body));
-      warn "cl> $hdr->{cmd}\n";
+      ctr_log (network => "send[%d]> %s: %s", length ($body), $hdr->{cmd}, join (',', keys %$hdr));
    }
 }
 
 sub connected : event_cb {
    my ($self) = @_;
    $self->{front}->msg ("Connected to Server!");
+   ctr_log (info => "connected to server %s on port %d", $self->{host}, $self->{port});
    $self->send_server ({ cmd => 'hello', version => "Games::Construder::Client 0.1" });
 }
 
 sub handle_packet : event_cb {
    my ($self, $hdr, $body) = @_;
 
-   warn "cl< $hdr->{cmd} (".length ($body).")\n";
+   ctr_log (network => "recv[%d]> %s: %s", length ($body), $hdr->{cmd}, join (',', keys %$hdr));
 
    if ($hdr->{cmd} eq 'hello') {
       $self->{front}->{server_info} = $hdr->{info};
@@ -206,11 +208,18 @@ sub handle_packet : event_cb {
       $self->{res}->set_resource_data ($hdr->{res}, $body);
       $self->send_server ({ cmd => 'transfer_poll' });
 
+   } elsif ($hdr->{cmd} eq 'login') {
+      $self->{front}->{res}->{config}->{chat}->{recent_login_name} = $hdr->{name};
+      $self->{front}->{res}->save_config;
+
    } elsif ($hdr->{cmd} eq 'transfer_end') {
       $self->{front}->msg;
       #print JSON->new->pretty->encode ($self->{front}->{res}->{resource});
       $self->{res}->post_proc;
-      $self->{res}->dump_resources;
+      ctr_cond_log (debug => sub {
+         ctr_log (debug => "dumping received resources:");
+         $self->{res}->dump_resources;
+      });
       $self->send_server (
          { cmd => 'login',
            ($self->{auto_login} ? (name => $self->{auto_login}) : ()) });
@@ -290,6 +299,7 @@ sub disconnected : event_cb {
    delete $self->{srv};
    $self->{front}->msg ("Disconnected from server!");
    $self->{recon} = AE::timer 5, 0, sub { $self->reconnect; };
+   ctr_log (info => "disconnected from server");
 }
 
 =back
@@ -297,8 +307,6 @@ sub disconnected : event_cb {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 
