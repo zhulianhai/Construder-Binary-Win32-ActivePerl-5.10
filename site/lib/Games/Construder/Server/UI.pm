@@ -249,8 +249,6 @@ sub commands {
 sub handle_command {
    my ($self, $cmd, $arg, $pos) = @_;
 
-   warn "CMD @_\n";
-
    if ($cmd =~ /slot_(\d+)/) {
       $self->{pl}->{data}->{slots}->{selected} = $1;
       $self->show;
@@ -263,6 +261,7 @@ sub layout {
    my $slots = $self->{pl}->{data}->{slots};
 
    my @slots;
+   my $selected_type;
    for (my $i = 0; $i < 10; $i++) {
       my $invid = $slots->{selection}->[$i];
 
@@ -273,23 +272,31 @@ sub layout {
       }
 
       my ($type, $invid) = $self->{pl}->{inv}->split_invid ($invid);
+      if ($slots->{selected} == $i) {
+         $selected_type = $type;
+      }
 
       push @slots,
-      ui_hlt_border (($i == $slots->{selected}),
-         [box => { padding => 2, align => "center" },
-           [model => { color => "#00ff00", width => 30 }, $type]],
-         [text => { font => "small",
-                    color =>
-                       (!defined ($cnt) || $cnt <= 0) ? "#990000" : "#999999",
-                    align => "center" },
-          sprintf ("[%d] %d", $i + 1, $cnt * 1)]
-      );
+         ui_hlt_border (($i == $slots->{selected}),
+            [box => { padding => 2, align => "center" },
+              [model => { color => "#00ff00", width => 30 }, ($cnt * 1) <= 0 ? 0 : $type]],
+            [text => { font => "small", color => "#ffffff", align => "center" },
+             $cnt
+                ? sprintf ("[%d] %d", $i + 1, $cnt * 1)
+                : sprintf ("[%d]", $i + 1)
+             ]
+         );
    }
    my @grid;
    $grid[0] = [splice @slots, 0, 5, ()];
    $grid[1] = \@slots;
 
+   my $obj =
+      $Games::Construder::Server::RES->get_object_by_type ($selected_type)
+         if $selected_type;
+
    ui_hud_window ([left => "down"],
+      $obj ? (ui_small_text ("Selected: " . $obj->{name})) : (),
       [box => { dir => "hor" }, @{$grid[0]}],
       [box => { dir => "hor" }, @{$grid[1]}]
    )
@@ -483,7 +490,6 @@ sub layout {
       my $wself = $self;
       weaken $wself;
       $self->{bio_intake} = $bio_usage;
-      warn "BIO INTKE @$bio_usage\n";
       $self->{bio_intake_tmr} = AE::timer 2, 0, sub {
          delete $wself->{bio_intake};
          $wself->show;
@@ -853,13 +859,16 @@ sub commands {
    my ($self) = @_;
 
    my ($inv_cnt) = $self->{pl}->{inv}->get_count ($self->{invid});
-   $inv_cnt or return ();
+   $inv_cnt or return (
+      return => "select",
+   );
 
    (
       (map {
          $_ => "slot_" . ($_ == 0 ? 9 : $_ - 1)
       } 0..9),
       d => "discard",
+      return => "select",
    )
 }
 
@@ -891,6 +900,8 @@ sub handle_command {
 
    my $invid = $self->{invid};
 
+   warn "CMD $cmd | " . $arg->{material} . "<\n";
+
    if ($cmd =~ /slot_(\d+)/) {
       $self->{pl}->{data}->{slots}->{selection}->[$1] = $invid;
       $self->{pl}->{data}->{slots}->{selected} = $1;
@@ -912,13 +923,14 @@ sub handle_command {
             $self->delete_ui ('discard_material');
          });
       $self->show_ui ('discard_material');
+
+   } elsif ($cmd eq 'select') {
+      $self->show ($arg->{material}) if $arg->{material};
    }
 }
 
 sub layout {
    my ($self, $type, $ent) = @_;
-
-   warn "LAYOUT MATVIEW $type | $ent\n";
 
    $self->{invid} = $type;
    my ($type, $invid) = $self->{pl}->{inv}->split_invid ($type);
@@ -946,29 +958,40 @@ sub layout {
          ? "It can be found in sectors with following types: " . join (", ", @sec)
          : "It cannot be found in any sector.";
    push @subtxts,
-      @destmat
-         ? "It can be used as source material for: "
-           . join (", ", map { $_->{name} } @destmat)
-         : "It can't be processed any further.";
-   push @subtxts,
       $inv_cnt
          ? "You have $inv_cnt of it in your inventory."
          : "You don't have any of it in your inventory.";
 
+   my @add;
+   if (@destmat) {
+      push @add,
+         ui_subtext ("It can be used as source material for: "),
+         map {
+            ui_select_item (material => $_->{type},
+               ui_small_text ($_->{name}))
+         } @destmat
+   } else {
+      push @subtxts, "It can't be processed any further.";
+   }
+
    ui_window ($o->{name},
       ui_pad_box (hor =>
          [box => { dir => "vert", align => "left" },
-            ui_text ($o->{lore}, align => "left", wrap => 36),
+            ui_text ($o->{lore}, align => "left", wrap => 40),
             ($ent && $ent->{label} ne ''
                ? (ui_subtext ("This $o->{name} is labelled:"),
                  ui_text ("$ent->{label}"))
                : ()),
             (map { ui_subtext ($_, wrap => 36, align => "left") } @subtxts),
+            @add,
             [box => { dir => "vert", align => "center" },
                $inv_cnt ? (
                   ui_key_explain ("0-9", "Assign to slot."),
                   ui_key_explain (d => "Discard material."),
-               ) : ()
+                  ui_key_explain (return => "View selected material."),
+               ) : (
+                  ui_key_explain (return => "View selected material."),
+               )
             ],
             [text => { color => "#666666", font => "small" }, "(" . $o->{type} . ")"],
          ],
@@ -977,10 +1000,13 @@ sub layout {
                [model => { align => "center", animated => 0, width => 140 }, $o->{type}],
                (@srcmat && $o->{model_cnt} > 0
                   ? [box => { dir => "vert", align => "left" },
-                     ui_small_text (
-                        "Build Pattern:\n"
-                        . join ("\n", map { $_->[1] . "x " . $_->[0]->{name} } @srcmat)
-                       . "\nYields " . ($o->{model_cnt} || 1) . " $o->{name}"),
+                     ui_small_text ("Build Pattern:"),
+                     (map {
+                        ui_select_item (
+                           material => $_->[0]->{type},
+                           ui_small_text ($_->[1] . "x " . $_->[0]->{name}))
+                     } @srcmat),
+                     ui_small_text ("Yields " . ($o->{model_cnt} || 1) . " $o->{name}"),
                     [model => { animated => 1, width => 120, align => "center" }, $o->{type}],
                   ] : ()),
             )
@@ -1012,7 +1038,7 @@ sub build_grid {
    for (0..5) {
       my @row;
       for (0..3) {
-         my $i = (shift @invids) || 1;
+         my $i = (shift @invids) || 0;
          my ($type, $i) = $inv->split_invid ($i);
          my $o = $Games::Construder::Server::RES->get_object_by_type ($type);
          my ($cnt) = $inv->get_count ($i);
@@ -1032,7 +1058,8 @@ sub commands {
    (
       return => "select",
       map { $_->[3] => "short_" . $_->[0] }
-         map { @$_ } @$grid
+         grep { $_->[2]->{type} }
+            map { @$_ } @$grid
    )
 }
 
@@ -1040,6 +1067,7 @@ sub handle_command {
    my ($self, $cmd, $arg) = @_;
 
    if ($cmd eq 'select') {
+      return unless $arg->{item}->[1];
       $self->hide;
       $self->{cb}->($arg->{item}->[0]);
 
@@ -1084,11 +1112,11 @@ sub layout {
                         [box => { dir => "vert", padding => 4 },
                            [box => { dir => "hor", align => "left" },
                               [model => { align => "center", width => 60 }, $_->[0]],
-                              ui_pad_box (vert => ui_text ($_->[1] ? $_->[1] : "0")),
+                              ui_pad_box (vert => ui_text ($_->[1] ? $_->[1] : "")),
                            ],
                            [box => { dir => "hor", align => "left" },
-                              ui_key ($_->[3], font => "small"),
-                              ui_small_text ($_->[0] == 1 ? "<empty>" : $_->[2]->{name})
+                              ui_key ($_->[1] ? $_->[3] : "", font => "small"),
+                              ui_small_text ($_->[1] ? $_->[2]->{name} : "")
                            ]
                         ]
                      )
@@ -1878,7 +1906,6 @@ sub handle_command {
 
 sub layout {
    my ($self, $pos, $entity) = @_;
-   warn "LAYOUt PSTOR $entity\n";
    $self->{pat_stor} = [$pos, $entity] if $pos;
    ($pos, $entity) = @{$self->{pat_stor}};
 
@@ -2342,6 +2369,60 @@ REF
       )
    }
 }
+
+package Games::Construder::Server::UI::Jumper;
+use Games::Construder::UI;
+
+use base qw/Games::Construder::Server::UI/;
+
+sub commands {
+   (
+      return => "activate"
+   )
+}
+
+sub handle_command {
+   my ($self, $cmd, $arg) = @_;
+
+   if ($cmd eq 'activate') {
+      $self->{entity}->{time_active} = 1;
+      $self->{entity}->{disp_vec} =
+         [$arg->{xdisp}, $arg->{ydisp}, $arg->{zdisp}];
+      $self->hide;
+   }
+}
+
+sub layout {
+   my ($self, $type, $entity) = @_;
+
+   $self->{entity} = $entity;
+
+   my $obj =
+      $Games::Construder::Server::RES->get_object_by_type ($type);
+
+   my $r = $entity->{range};
+
+   ui_window ($obj->{name},
+      ui_desc ("Enter displacement direction:"),
+      ui_subdesc ("Range: " . $entity->{range} . " sectors"),
+      ui_subdesc ("Accuracy: " . (100 * $entity->{accuracy}) . "%"),
+      ui_subdesc ("Malfunction: " . (100 * $entity->{fail_chance}) . "%"),
+      ui_pad_box (hor =>
+         ui_text ("X"),
+         ui_range (xdisp => -$r, $r, $r > 40 ? 5 : 1, "%d", 0),
+      ),
+      ui_pad_box (hor =>
+         ui_text ("Y"),
+         ui_range (ydisp => -$r, $r, $r > 40 ? 5 : 1, "%d", 0),
+      ),
+      ui_pad_box (hor =>
+         ui_text ("Z"),
+         ui_range (zdisp => -$r, $r, $r > 40 ? 5 : 1, "%d", 0),
+      ),
+      ui_key_explain (return => "Activate jumper"),
+   )
+}
+
 
 =back
 

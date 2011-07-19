@@ -275,6 +275,17 @@ sub set_ambient_light {
    $self->all_chunks_dirty;
 }
 
+sub clear_chunks {
+   my ($self) = @_;
+
+   for (keys %{$self->{compiled_chunks}}) {
+      my $p = world_id2pos ($_);
+      $self->free_compiled_chunk (@$p);
+   }
+
+   $self->{dirty_chunks} = {};
+}
+
 sub all_chunks_dirty {
    my ($self) = @_;
    for my $id (keys %{$self->{compiled_chunks}}) {
@@ -287,7 +298,6 @@ sub free_compiled_chunk {
    my $c = [$cx, $cy, $cz];
    my $id = world_pos2id ($c);
    my $l = delete $self->{compiled_chunks}->{$id};
-   delete $self->{dirty_chunks}->{$id};
    Games::Construder::Renderer::free_geom ($l) if $l;
    # WARNING FIXME XXX: this might not free up all chunks that were set/initialized by the server!
    Games::Construder::World::purge_chunk (@$c);
@@ -621,6 +631,7 @@ sub render_hud {
       next unless $_->{sticky};
       $_->display;
    }
+
    if (@{$self->{active_ui_stack}}) {
       $self->{active_ui_stack}->[-1]->[1]->display;
    }
@@ -710,6 +721,12 @@ sub setup_event_poller {
          unless ($self->can_see_chunk (@$p, 1)) {
             $self->free_compiled_chunk (@$p);
             #d# warn "freeed compiled chunk $kx, $ky, $kz\n";
+         }
+      }
+
+      for my $id (keys %{$self->{dirty_chunks}}) {
+         unless (exists $self->{compiled_chunks}->{$_}) {
+            delete $self->{dirty_chunks}->{$_};
          }
       }
    };
@@ -978,13 +995,9 @@ sub physics_tick : event_cb {
 
       if (ref $collide_normal) {
           # figure out how much downward velocity is removed:
-          my $down_part;
+          my $down_part = 0;
           my $coll_depth = vlength ($collide_normal);
-          if ($coll_depth == 0) {
-             #d#warn "collidedd vector == 0, set vel = 0\n";
-             $down_part = 0;
-
-          } else {
+          if (vlength ($player->{vel}) > 0) {
              vinorm ($collide_normal, $coll_depth);
 
              my $vn = vnorm ($player->{vel});
@@ -1197,7 +1210,7 @@ sub show_credits {
       map {
          ref $_
             ? (ui_subdesc ("* $_->[0]", font => "small"),
-               ui_small_text ($_->[1], align => "center"))
+               ui_small_text ($_->[1], align => "center", wrap => 100))
             : ui_subdesc ($_, font => "small")
       } @{$si->{credits}}
    ));
@@ -1371,7 +1384,7 @@ sub input_key_down : event_cb {
 
    if ($name eq 'space') {
       $self->{upboost} = 1;
-      viaddd ($self->{phys_obj}->{player}->{vel}, 0, 5, 0);
+      viaddd ($self->{phys_obj}->{player}->{vel}, 0, 2.5, 0);
    } elsif ($name eq 'g') {
       $self->{ghost_mode} = not $self->{ghost_mode};
    } elsif ($name eq 'f') {

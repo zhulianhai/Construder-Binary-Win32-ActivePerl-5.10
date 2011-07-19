@@ -1,1 +1,59 @@
-Date: 15.07.2011 21:27:33updated to latest Construder state:* lots of bug fixes!* world: expanded the world a bit to be infinite again. The sphere hull is sitting in the center of a giant void box now, which is 400x400x400 sectors big.* gameplay: the player is not teleported to void sectors anymore when he is randomly teleported.* world: rethought light distribution a bit. The world is now a bit brighter in general due to many more placed lights. I hope the iterative server light calculation does not overwhelm anyone's computer.* Redesign of the world. The World is now a gigantic sphere hull which is 100 sectors thick. There is a center at sector 0,0,0 from which X, Y and Z axises are expanding 131 sectors in each direction. The center has a nice golden pyramid with a diamond core at the moment. The player starts at the top of the sphere at Sector 1,130,1.* Fixed teleportation to places without floor.* Made space ignite the upward booster the whole time space is pressed down.* raised max ambient light.* spelling fixes* added lore to 10million trophy* automatically eating an item now shows a message* server and client debug output is now more useful to users* background fog can now be bright or darkDate: 11.07.2011 20:49:12updated to latest Construder state:* added server info to F7 and a confirm dialog for server shutdown.* added F1/F2 note to login screen!* properly resize screen now.* several bug fixesDate: 10.07.2011 20:01:55updated to latest Construder state:* removed unused menu entries.
+Date: 19.07.2011 12:18:39
+
+updated to latest Construder state:
+
+- gameplay: added jumper items, which can teleport the player
+  once into a certain direction.
+- code: remove some debugging output from server UI stuff.
+- ui: display the name of the object in the selected slot.
+- engine: rewrote (de)materialization to be more generic, tick
+  driven and handle player logouts more gracefully.
+- renderer: try to cleanup unused ctr_dyn_bufs more eagerly.
+  the client now eats ram much much slower.
+- code: small init memleak fix. which did not occur yet.
+- engine: cleanup more data structures that were filled
+  needlessly.
+- engine: plugged a small memory leak that had the potential to
+  grow really big.
+- game: english corrections, thanks a lot Zaba!
+- engine: cleaning up the axis arrays, even though they are
+  really not _that_ expensive memory wise.
+- engine: use static buffer for chunk data serialization.
+- engine: added memory profiling counters.
+- code: moved debugging code into Construder.pm again.
+  Hopefully the CPAN indexer doesn't find it this time...
+* made it much easier to browse materials in the material view.
+* tuned down initial jump upward velocity, to make hovering easier.
+
+Date: 15.07.2011 21:27:33
+
+updated to latest Construder state:
+
+* lots of bug fixes!
+* world: expanded the world a bit to be infinite again. The sphere hull is sitting in the center of a giant void box now, which is 400x400x400 sectors big.
+* gameplay: the player is not teleported to void sectors anymore when he is randomly teleported.
+* world: rethought light distribution a bit. The world is now a bit brighter in general due to many more placed lights. I hope the iterative server light calculation does not overwhelm anyone's computer.
+* Redesign of the world. The World is now a gigantic sphere hull which is 100 sectors thick. There is a center at sector 0,0,0 from which X, Y and Z axises are expanding 131 sectors in each direction. The center has a nice golden pyramid with a diamond core at the moment. The player starts at the top of the sphere at Sector 1,130,1.
+* Fixed teleportation to places without floor.
+* Made space ignite the upward booster the whole time space is pressed down.
+* raised max ambient light.
+* spelling fixes
+* added lore to 10million trophy
+* automatically eating an item now shows a message
+* server and client debug output is now more useful to users
+* background fog can now be bright or dark
+
+Date: 11.07.2011 20:49:12
+
+updated to latest Construder state:
+
+* added server info to F7 and a confirm dialog for server shutdown.
+* added F1/F2 note to login screen!
+* properly resize screen now.
+* several bug fixes
+
+Date: 10.07.2011 20:01:55
+
+updated to latest Construder state:
+
+* removed unused menu entries.

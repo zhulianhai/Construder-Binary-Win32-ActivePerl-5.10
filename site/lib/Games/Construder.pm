@@ -26,7 +26,7 @@ our @EXPORT = qw/
    ctr_prof
 /;
 
-our $VERSION = '0.94';
+our $VERSION = '0.95';
 
 use XSLoader;
 XSLoader::load "Games::Construder", $Games::Construder::VERSION;
@@ -283,12 +283,38 @@ sub draw_commands {
 
 package Games::Construder::Debug;
 use Games::Construder::Logging;
+use AnyEvent;
 use AnyEvent::Debug;
 
 our $SHELL;
 
+our $PROF_TMR;
+
+our @CCNT_NAMES = qw/
+   chunk_changes
+   active_cell_changes
+   allocated_axises
+   allocated_axises_size
+   noise_cnt
+   noise_size
+   dyn_buf_cnt
+   dyn_buf_size
+   geom_cnt
+   allocated_chunks
+/;
+
 sub init {
    my ($name) = @_;
+
+   $PROF_TMR = AE::timer 60, 60, sub {
+      my $c_cntrs = Games::Construder::World::get_prof_counters ();
+      ctr_log (memory_prof => "C Counters:");
+      my @names = @CCNT_NAMES;
+      for (@$c_cntrs) {
+         my $name = shift @names;
+         ctr_log (memory_prof => "   %20s: %d", $name, $_);
+      }
+   };
 
    return unless $ENV{PERL_GAMES_CONSTRUDER_DEBUG};
 

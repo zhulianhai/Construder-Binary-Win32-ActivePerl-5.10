@@ -19,6 +19,7 @@ use common::sense;
 use Games::Construder::Server::PCB;
 use Games::Construder::Server::World;
 use Games::Construder::Vector;
+use Games::Construder::Logging;
 use Games::Construder;
 use Scalar::Util qw/weaken/;
 
@@ -40,9 +41,14 @@ our %TYPES = (
    48 => \&ia_vaporizer,
    62 => \&ia_teleporter,
    51 => \&ia_auto,
+   71 => \&ia_jumper,
+   72 => \&ia_jumper,
+   73 => \&ia_jumper,
+   74 => \&ia_jumper,
 );
 
 our %TYPES_INSTANCIATE = (
+   1  => \&in_materialization,
    31 => \&in_pattern_storage,
    34 => \&in_message_beacon,
    45 => \&in_vaporizer,
@@ -53,6 +59,10 @@ our %TYPES_INSTANCIATE = (
    51 => \&in_auto,
    62 => \&in_teleporter,
    70 => \&in_mat_upgrade,
+   71 => \&in_jumper,
+   72 => \&in_jumper,
+   73 => \&in_jumper,
+   74 => \&in_jumper,
    500 => \&in_trophy,
    501 => \&in_trophy,
    502 => \&in_trophy,
@@ -62,6 +72,7 @@ our %TYPES_INSTANCIATE = (
 );
 
 our %TYPES_TIMESENSITIVE = (
+   1  => \&tmr_materialization,
    31 => \&tmr_pattern_storage,
    45 => \&tmr_vaporizer,
    46 => \&tmr_vaporizer,
@@ -69,6 +80,10 @@ our %TYPES_TIMESENSITIVE = (
    48 => \&tmr_vaporizer,
    50 => \&tmr_drone,
    51 => \&tmr_auto,
+   71 => \&tmr_jumper,
+   72 => \&tmr_jumper,
+   73 => \&tmr_jumper,
+   74 => \&tmr_jumper,
 );
 
 our %TYPES_PERSISTENT = (
@@ -114,6 +129,98 @@ sub in_trophy {
 
 sub in_mat_upgrade {
    { }
+}
+
+sub in_materialization {
+   my ($type, $time, $end_action, %args) = @_;
+   {
+      time_active => 1,
+      rest_time   => $time,
+      action      => $end_action,
+      %args
+   }
+}
+
+sub tmr_materialization {
+   my ($pos, $entity, $type, $dt) = @_;
+
+   $entity->{rest_time} -= $dt;
+   #d# warn "ENTITIY MAT DONE: " . JSON->new->pretty->encode ($entity) . "\n";
+
+   return unless $entity->{rest_time} <= 0;
+
+   my $handled = 0;
+   if (my $act = $entity->{action}) {
+      my ($pl) =
+         $Games::Construder::Server::World::SRV->get_player ($entity->{player});
+      my $mtype = $entity->{m_type};
+      my $ment  = $entity->{m_type_ent};
+
+      if ($act eq 'dematerialize') {
+         my $unsuccessful = sub {
+            world_mutate_at ($pos, sub {
+               my ($d) = @_;
+               if ($d->[0] == 1) {
+                  $d->[0] = $mtype;
+                  $d->[5] = $ment;
+                  return 1;
+               }
+               0
+            });
+         };
+
+         unless ($pl) {
+            $unsuccessful->();
+            return;
+         }
+
+         if ($pl->{inv}->add ($mtype, $ment || 1)) {
+            world_mutate_at ($pos, sub {
+               my ($d) = @_;
+               if ($d->[0] == 1) {
+                  $d->[0] = 0;
+                  $d->[3] &= 0xF0;
+                  return 1;
+               }
+               0
+            });
+
+         } else {
+            $unsuccessful->();
+         }
+
+         $handled = 1;
+
+      } elsif ($act eq 'materialize') {
+         world_mutate_at ($pos, sub {
+            my ($d) = @_;
+
+            if ($d->[0] == 1) {
+               $d->[0] = $mtype;
+               $d->[5] = $ment;
+               $d->[3] &= 0xF0; # clear color :)
+               $d->[3] |= $entity->{color} & 0x0F;
+               $pl->push_tick_change (score => $entity->{score}) if $pl;
+               return 1
+            }
+            0
+         });
+
+         $handled = 1;
+      }
+   }
+
+   unless ($handled) {
+      world_mutate_at ($pos, sub {
+         my ($d) = @_;
+         if ($d->[0] == 1) {
+            $d->[0] = 0;
+            $d->[3] &= 0xF0;
+            return 1;
+         }
+         return 0
+      });
+   }
 }
 
 sub in_vaporizer {
@@ -199,6 +306,8 @@ sub ia_construction_pad {
 
    my $a = Games::Construder::World::get_pattern (@$POS, 0);
    if ($a) {
+      ctr_log (devel => "construction pad pattern at @$POS: %s", JSON->new->encode ($a));
+
       my $obj = $Games::Construder::Server::RES->get_object_by_pattern ($a);
       if ($obj) {
          my ($score, $time) =
@@ -217,23 +326,14 @@ sub ia_construction_pad {
             world_mutate_at (\@poses, sub {
                my ($data) = @_;
                $data->[0] = 1;
-               $data->[3] &= 0xF0; # clear color :)
-               my $ent = $data->[5]; # kill entity
-               $data->[5] = undef;
-               if ($ent) {
-                  Games::Construder::Server::Objects::destroy ($ent);
-               }
+               $data->[5] =
+                  Games::Construder::Server::Objects::instance (
+                     1, $time, 'disappear');
                1
             }, no_light => 1);
 
             my $tmr;
             $tmr = AE::timer $time, 0, sub {
-               world_mutate_at (\@poses, sub {
-                  my ($data) = @_;
-                  $data->[0] = 0;
-                  1
-               });
-
                my $gen_cnt = $obj->{model_cnt} || 1; # || 1 shouldn't happen... but u never know
 
                my $cnt =
@@ -705,6 +805,88 @@ sub tmr_auto {
          return 0;
       });
    }
+}
+
+sub in_jumper {
+   my ($type) = @_;
+   my $obj =
+      $Games::Construder::Server::RES->get_object_by_type ($type);
+   {
+      range       => $obj->{jumper_range},
+      accuracy    => $obj->{jumper_accuracy},
+      accuracy_vec => $obj->{jumper_accuracy_vec},
+      fail_chance => $obj->{jumper_fail_chance},
+      act_time    => 5,
+   }
+}
+
+sub tmr_jumper {
+   my ($pos, $entity, $type, $dt) = @_;
+
+   unless ($entity->{did_hl}) {
+      for ($Games::Construder::Server::World::SRV->players_near_pos ($pos)) {
+         $_->[0]->highlight ($pos, $entity->{act_time}, [0, 1, 1]);
+      }
+      $entity->{did_hl} = 1;
+   }
+
+   $entity->{act_time} -= $dt;
+
+   return if $entity->{act_time} > 0;
+
+   world_mutate_at ($pos, sub {
+      my ($d) = @_;
+
+      if ($d->[0] == $type) {
+         $d->[0] = 0;
+         $d->[3] &= 0xF0;
+
+         my ($pl) =
+            $Games::Construder::Server::World::SRV->get_player ($entity->{player});
+         return 1 unless $pl;
+
+         if (rand () < $entity->{fail_chance}) {
+            ctr_log (debug => "Jumper (failed) values: %s",
+               JSON->new->encode ($entity));
+            $pl->msg (1, "Jumper malfunction. Please retry.");
+            return 1;
+         }
+
+         my $displ = $entity->{disp_vec};
+         my $miss;
+
+         if (rand () < $entity->{accuracy}) {
+            my $len = vlength ($displ);
+            $miss = [map {
+               int (
+                  ($entity->{accuracy} - rand ($entity->{accuracy} * 2))
+                  * $len
+                  + 0.5
+               )
+            } 0..2];
+            $displ = vadd ($displ, $miss);
+         }
+
+         $pl->teleport (
+            vadd ($pl->{data}->{pos}, vsmul ($displ, 60)),
+            1
+         );
+         $pl->msg (0, "Jumper displaces you by @$displ sectors..."
+                      . ($miss ? "Target missed by @$miss sectors..." : ""));
+
+         ctr_log (debug => "Jumper (ok) values: %s, %s",
+            JSON->new->encode ($entity), JSON->new->encode ($displ));
+
+         return 1;
+      }
+      0
+   });
+}
+
+sub ia_jumper {
+   my ($PL, $POS, $type, $entity) = @_;
+   $entity->{player} = $PL->{name};
+   $PL->{uis}->{jumper}->show ($type, $entity);
 }
 
 =back
